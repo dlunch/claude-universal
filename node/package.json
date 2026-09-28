@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "semver": "7.8.5",
+    "slice-ansi": "9.0.1",
+    "smol-toml": "1.9.0",
+    "string-width": "8.3.0",
+    "which": "7.0.0",
+    "wrap-ansi": "10.0.2",
+    "ws": "8.22.0",
+    "yaml": "2.9.1"
+  }
+}
