@@ -1,12 +1,10 @@
 name: Build
 
-# Builds and tests the latest Claude Code release every day without publishing anything:
-# the images contain Anthropic's code, which is not redistributed.
+# Builds and tests the latest Claude Code release without publishing anything: the images
+# contain Anthropic's code, which is not redistributed.
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -33,6 +31,7 @@ jobs:
 
       # The armv7 image runs the Node rebuild, which must behave like the official binary.
       - name: Test
+        timeout-minutes: 20
         run: |
           sudo apt-get install -y tmux
           test/compare.sh claude-test:amd64 claude-test:v7

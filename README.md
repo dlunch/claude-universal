@@ -39,7 +39,7 @@ install -m 755 claude ~/.local/bin/claude
   standalone binary it is its own `process.execPath`.
 
 The workflow in [`.github/workflows/build.yml`](.github/workflows/build.yml) builds the latest
-release every day and runs [`test/compare.sh`](test/compare.sh) without publishing anything:
+release on every push and runs [`test/compare.sh`](test/compare.sh) without publishing anything:
 against a mock Messages API, the armv7 image must answer
 a prompt that runs a Bash tool call both headless and as a background session, and render an
 interactive session identically to the official amd64 binary.
