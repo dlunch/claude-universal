@@ -35,8 +35,8 @@ background() {
     echo "$0" > ~/.claude.json
     timeout -k 5 180 claude --bg --dangerously-skip-permissions RUN_TOOL > /tmp/bg.out 2>&1
     id=$(sed -n "s/^backgrounded · //p" /tmp/bg.out)
-    for i in $(seq 180); do
-      [ -n "$id" ] || break
+    end=$(($(date +%s) + 180))
+    while [ -n "$id" ] && [ "$(date +%s)" -lt "$end" ]; do
       timeout -k 5 30 claude logs "$id" | grep -q tool-ran-42 && echo "$1" && exit
       sleep 1
     done
