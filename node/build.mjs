@@ -5,8 +5,8 @@
 // A Bun standalone executable carries its embedded filesystem (/$bunfs/root/...) as a blob
 // that ends with an `Offsets` struct followed by the "\n---- Bun! ----\n" trailer. The module
 // table in that blob lists every embedded file. JS modules are bundled by esbuild into
-// <out-dir>/cli.cjs; every other file is written to <out-dir> under its original name, and
-// <out-dir>/assets.json records which Bun loader serves it (see claude.cjs). The image
+// <out-dir>/cli.js; every other file is written to <out-dir> under its original name, and
+// <out-dir>/assets.json records which Bun loader serves it (see claude.mjs). The image
 // installs <out-dir> at /$bunfs/root so the paths the app computes resolve unchanged.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,9 +63,9 @@ for (let i = 0; i < tableLen / RECORD_SIZE; i++) {
 }
 fs.writeFileSync(path.join(outDir, 'assets.json'), JSON.stringify(assets));
 
-await esbuild.build({
-  stdin: { contents: `import ${JSON.stringify(entry)};`, sourcefile: 'entry.mjs' },
-  outfile: path.join(outDir, 'cli.cjs'),
+const options = {
+  outdir: outDir,
+  metafile: true,
   bundle: true,
   format: 'cjs',
   platform: 'node',
@@ -92,4 +92,14 @@ await esbuild.build({
         ({ contents: modules.get(args.path), loader: 'js' }));
     },
   }],
+};
+const bundle = (names) => esbuild.build({
+  ...options,
+  entryPoints: names.map((name) => ({ in: name, out: name.slice(VFS_ROOT.length).replace(/\.js$/, '') })),
 });
+
+// The app runs some modules by path (the hooks worker, native addon wrappers) instead of
+// importing them, so each module the CLI bundle does not contain is bundled on its own.
+const { metafile } = await bundle([entry]);
+const bundled = new Set(Object.keys(metafile.inputs).map((input) => input.slice('bunfs:'.length)));
+await bundle([...modules.keys()].filter((name) => !bundled.has(name)));

@@ -45,6 +45,21 @@ jobs:
       - uses: docker/setup-buildx-action@v4
         if: steps.version.outputs.skip != 'true'
 
+      - name: Build test images
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          for platform in linux/amd64 linux/arm/v7; do
+            docker buildx build --platform "$platform" --load -t "claude-test:${platform##*/}" \
+              --build-arg CLAUDE_VERSION=${{ steps.version.outputs.version }} --cache-from type=gha .
+          done
+
+      # The armv7 image runs the Node rebuild, which must behave like the official binary.
+      - name: Test
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          sudo apt-get install -y tmux
+          test/compare.sh claude-test:amd64 claude-test:v7
+
       - uses: docker/build-push-action@v7
         if: steps.version.outputs.skip != 'true'
         with:

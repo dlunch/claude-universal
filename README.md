@@ -19,9 +19,15 @@ Claude Code version (for example `2.1.284`).
 - **armv7**: Anthropic publishes no 32-bit build, so the image runs the application on Node.js 22.
   [`node/build.mjs`](node/build.mjs) reads the module table that Bun appends to the official
   binary, bundles the embedded JavaScript with esbuild, and writes the embedded assets under
-  `/$bunfs/root`, the path the app expects them at. [`node/claude.cjs`](node/claude.cjs) serves
-  those assets through Node module hooks and [`node/bun.cjs`](node/bun.cjs) provides the Bun
-  APIs the app calls without a Node fallback.
+  `/$bunfs/root`, the path the app expects them at. [`node/claude.mjs`](node/claude.mjs) serves
+  those assets through Node module hooks and [`node/bun.mjs`](node/bun.mjs) provides the Bun
+  APIs the app calls without a Node fallback, including a JavaScript implementation of the
+  native terminal cell renderer ([`node/cell-segmenter.mjs`](node/cell-segmenter.mjs)).
+  `claude` is a Node single executable application, so like Bun's standalone binary it is its
+  own `process.execPath`.
 
 The workflow in [`.github/workflows/build.yml`](.github/workflows/build.yml) checks the latest
-release every day and publishes images for versions not built yet.
+release every day and publishes images for versions not built yet. Before publishing, it runs
+[`test/compare.sh`](test/compare.sh): against a mock Messages API, the armv7 image must answer
+a headless prompt that runs a Bash tool call, and render an interactive session identically to
+the official amd64 binary.
