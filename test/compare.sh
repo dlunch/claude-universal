@@ -44,7 +44,7 @@ background() {
     cat /tmp/bg.out
     [ -n "$id" ] && timeout -k 5 30 claude logs "$id"
     for p in /proc/[0-9]*; do tr "\0" " " < "$p/cmdline"; echo; done
-    tail -n 30 /tmp/cc-daemon-*/stderr.log' "$CONFIG" "$EXPECTED"
+    tail -n 30 /tmp/cc-daemon-*/stderr.log /tmp/cc-daemon-*/*/*.log 2>&1' "$CONFIG" "$EXPECTED"
 }
 
 interactive() {
@@ -95,7 +95,7 @@ wait_for() { # session, pattern
 status=0
 for image in "$1" "$2"; do
   for mode in headless background; do
-    output=$($mode "$image")
+    output=$($mode "$image") || true
     if [ "$output" = "$EXPECTED" ]; then
       echo "$image $mode: ok"
     else
