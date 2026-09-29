@@ -33,12 +33,18 @@ headless() {
 background() {
   claude "$1" -c '
     echo "$0" > ~/.claude.json
-    id=$(claude --bg --dangerously-skip-permissions RUN_TOOL 2>/dev/null | sed -n "s/^backgrounded · //p")
+    timeout -k 5 180 claude --bg --dangerously-skip-permissions RUN_TOOL > /tmp/bg.out 2>&1
+    id=$(sed -n "s/^backgrounded · //p" /tmp/bg.out)
     for i in $(seq 180); do
-      claude logs "$id" | grep -q tool-ran-42 && echo "$1" && exit
+      [ -n "$id" ] || break
+      timeout -k 5 30 claude logs "$id" | grep -q tool-ran-42 && echo "$1" && exit
       sleep 1
     done
-    claude logs "$id"' "$CONFIG" "$EXPECTED"
+    # Diagnostics for a session that did not answer.
+    cat /tmp/bg.out
+    [ -n "$id" ] && timeout -k 5 30 claude logs "$id"
+    for p in /proc/[0-9]*; do tr "\0" " " < "$p/cmdline"; echo; done
+    tail -n 30 /tmp/cc-daemon-*/stderr.log' "$CONFIG" "$EXPECTED"
 }
 
 interactive() {
