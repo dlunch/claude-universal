@@ -39,10 +39,16 @@ WORKDIR /sea
 COPY node/sea.cjs node/sea.json ./
 RUN node --experimental-sea-config sea.json
 
+# Runtime dependencies include node-pty, a native addon built for the target platform.
+FROM node:22-bookworm AS node-modules
+WORKDIR /modules
+COPY node/package.json node/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS node-build
 WORKDIR /build
 COPY node/package.json node/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY node/ ./
 COPY --from=download /claude /claude
 COPY --from=sea /usr/local/bin/node /out/claude
@@ -50,8 +56,7 @@ COPY --from=sea /sea/sea.blob ./
 RUN node build.mjs /claude /out/root \
     && npx postject /out/claude NODE_SEA_BLOB sea.blob \
       --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
-    && npm prune --omit=dev \
-    && cp -r node_modules claude.mjs bun.mjs cell-segmenter.mjs /out/root/
+    && cp claude.mjs bun.mjs cell-segmenter.mjs spawn.mjs /out/root/
 
 FROM base AS runtime-amd64
 COPY --from=download /claude /usr/local/bin/claude
@@ -63,6 +68,7 @@ COPY --from=download /claude /usr/local/bin/claude
 # them resolve unchanged.
 FROM base AS runtime-arm
 COPY --from=node-build /out/root /\$bunfs/root
+COPY --from=node-modules /modules/node_modules /\$bunfs/root/node_modules
 COPY --from=node-build /out/claude /usr/local/bin/claude
 
 FROM runtime-${TARGETARCH}

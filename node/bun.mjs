@@ -12,6 +12,7 @@ import which from 'which';
 import wrapAnsi from 'wrap-ansi';
 import YAML from 'yaml';
 import { CellSegmenter } from './cell-segmenter.mjs';
+import { file, spawn, Terminal } from './spawn.mjs';
 
 // The app only compares these digests with ones computed by the same runtime, so any stable
 // 64-bit hash serves in place of Bun's wyhash and xxHash64.
@@ -35,6 +36,9 @@ globalThis.Bun = {
   zstdDecompressSync: zlib.zstdDecompressSync,
   zstdDecompress: util.promisify(zlib.zstdDecompress),
   stdin: { stream: () => Readable.toWeb(process.stdin) },
+  file,
+  spawn,
+  Terminal,
   sleepSync: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
   // Namespace probed for optional JIT tuning methods.
   unsafe: {},

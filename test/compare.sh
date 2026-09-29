@@ -1,7 +1,8 @@
 #!/bin/sh
 # End-to-end test against a mock Messages API (test/mock-api.mjs): the model asks for a Bash
-# tool call and answers with its output. Checks that headless runs of both images print the
-# expected answer, and that an interactive session renders the same screen in both.
+# tool call and answers with its output. Checks that headless runs and background sessions of
+# both images reach the expected answer, and that an interactive session renders the same
+# screen in both.
 #
 #   test/compare.sh <reference-image> <image>
 set -eu
@@ -25,6 +26,19 @@ claude() { # docker options..., image, claude arguments...
 
 headless() {
   claude "$1" -c 'echo "$0" > ~/.claude.json && exec claude --dangerously-skip-permissions -p RUN_TOOL' "$CONFIG"
+}
+
+# Starts a background session, which runs on a pseudo-terminal, and prints its terminal
+# output once it contains the answer.
+background() {
+  claude "$1" -c '
+    echo "$0" > ~/.claude.json
+    id=$(claude --bg --dangerously-skip-permissions RUN_TOOL 2>/dev/null | sed -n "s/^backgrounded · //p")
+    for i in $(seq 180); do
+      claude logs "$id" | grep -q tool-ran-42 && echo "$1" && exit
+      sleep 1
+    done
+    claude logs "$id"' "$CONFIG" "$EXPECTED"
 }
 
 interactive() {
@@ -74,13 +88,15 @@ wait_for() { # session, pattern
 
 status=0
 for image in "$1" "$2"; do
-  output=$(headless "$image")
-  if [ "$output" = "$EXPECTED" ]; then
-    echo "$image headless: ok"
-  else
-    printf '%s headless: unexpected output\n%s\n' "$image" "$output" >&2
-    status=1
-  fi
+  for mode in headless background; do
+    output=$($mode "$image")
+    if [ "$output" = "$EXPECTED" ]; then
+      echo "$image $mode: ok"
+    else
+      printf '%s %s: unexpected output\n%s\n' "$image" "$mode" "$output" >&2
+      status=1
+    fi
+  done
 done
 
 expected=$(interactive "$1")
