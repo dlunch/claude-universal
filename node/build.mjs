@@ -6,8 +6,8 @@
 // that ends with an `Offsets` struct followed by the "\n---- Bun! ----\n" trailer. The module
 // table in that blob lists every embedded file. JS modules are bundled by esbuild into
 // <out-dir>/cli.js; every other file is written to <out-dir> under its original name, and
-// <out-dir>/assets.json records which Bun loader serves it (see claude.mjs). The image
-// installs <out-dir> at /$bunfs/root so the paths the app computes resolve unchanged.
+// <out-dir>/assets.json records which Bun loader serves it (see claude.mjs). Paths the bundle
+// spells out under /$bunfs/root/ are rewritten to resolve under <out-dir> wherever it is.
 import fs from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
@@ -58,7 +58,7 @@ for (let i = 0; i < tableLen / RECORD_SIZE; i++) {
     const dest = path.join(outDir, name.slice(VFS_ROOT.length));
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, slice(rec + 8));
-    assets[name] = loader;
+    assets[name.slice(VFS_ROOT.length)] = loader;
   }
 }
 fs.writeFileSync(path.join(outDir, 'assets.json'), JSON.stringify(assets));
@@ -66,11 +66,13 @@ fs.writeFileSync(path.join(outDir, 'assets.json'), JSON.stringify(assets));
 const options = {
   outdir: outDir,
   metafile: true,
+  write: false,
   bundle: true,
   format: 'cjs',
   platform: 'node',
   target: 'node22',
   legalComments: 'none',
+  minifyWhitespace: true,
   logLevel: 'error',
   // Bun's import.meta extensions, mapped onto the CommonJS scope of the bundle.
   define: {
@@ -82,7 +84,6 @@ const options = {
     'import.meta.url': '__import_meta_url',
     'import.meta.main': 'true',
   },
-  banner: { js: 'var __import_meta_url = require("node:url").pathToFileURL(__filename).href;' },
   plugins: [{
     name: 'bunfs',
     setup(build) {
@@ -93,13 +94,36 @@ const options = {
     },
   }],
 };
-const bundle = (names) => esbuild.build({
-  ...options,
-  entryPoints: names.map((name) => ({ in: name, out: name.slice(VFS_ROOT.length).replace(/\.js$/, '') })),
-});
+// Embedded paths the bundles reference by name at runtime.
+const referenced = new Set();
 
-// The app runs some modules by path (the hooks worker, native addon wrappers) instead of
-// importing them, so each module the CLI bundle does not contain is bundled on its own.
-const { metafile } = await bundle([entry]);
-const bundled = new Set(Object.keys(metafile.inputs).map((input) => input.slice('bunfs:'.length)));
-await bundle([...modules.keys()].filter((name) => !bundled.has(name)));
+async function bundle(name) {
+  const out = name.slice(VFS_ROOT.length).replace(/\.js$/, '');
+  const root = path.relative(path.dirname(out), '.');
+  const result = await esbuild.build({
+    ...options,
+    entryPoints: [{ in: name, out }],
+    banner: {
+      js: 'var __import_meta_url = require("node:url").pathToFileURL(__filename).href;\n'
+        + `var __bunfs_root = require("node:path").join(__dirname, ${JSON.stringify(root)});`,
+    },
+  });
+  for (const { path: file, text } of result.outputFiles) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text.replace(/"\/\$bunfs\/root(\/[^"\\]*)"/g, (_, rest) => {
+      referenced.add(VFS_ROOT + rest.slice(1));
+      return `(__bunfs_root + ${JSON.stringify(rest)})`;
+    }));
+  }
+  return result.metafile;
+}
+
+// The app runs some modules by path (the hooks worker) instead of importing them, so each
+// module referenced that way is bundled on its own.
+const { inputs } = await bundle(entry);
+const done = new Set(Object.keys(inputs).map((input) => input.replace(/^bunfs:/, '')));
+for (const name of referenced) {
+  if (done.has(name) || !modules.has(name)) continue;
+  done.add(name);
+  await bundle(name);
+}

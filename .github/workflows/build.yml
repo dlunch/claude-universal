@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -72,3 +72,19 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Publish the armv7 executable
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker buildx build --platform linux/arm/v7 --target executable \
+            --build-arg CLAUDE_VERSION="$VERSION" --output type=local,dest=dist .
+          mv dist/claude dist/claude-linux-armv7
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/claude-linux-armv7 --clobber
+          else
+            gh release create "v$VERSION" dist/claude-linux-armv7 --title "Claude Code $VERSION" \
+              --notes "Claude Code $VERSION for linux/arm/v7 as a single executable."
+          fi

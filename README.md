@@ -13,6 +13,17 @@ docker run -it --rm \
 The `claude-home` volume keeps the login and settings between runs. Tags are `latest` and the
 Claude Code version (for example `2.1.284`).
 
+## Standalone armv7 executable
+
+Each release also ships `claude-linux-armv7`, a single executable that runs outside Docker on
+32-bit ARM Linux with glibc 2.28 or newer. It needs `libatomic1` and uses the system `rg`
+(ripgrep). The first run extracts the app into `~/.cache/claude-universal`.
+
+```sh
+curl -fLo ~/.local/bin/claude https://github.com/dlunch/claude-universal/releases/latest/download/claude-linux-armv7
+chmod +x ~/.local/bin/claude
+```
+
 ## How it works
 
 - **amd64, arm64**: the official native binary, verified against the release manifest checksum.
@@ -24,8 +35,8 @@ Claude Code version (for example `2.1.284`).
   APIs the app calls without a Node fallback, including a JavaScript implementation of the
   native terminal cell renderer ([`node/cell-segmenter.mjs`](node/cell-segmenter.mjs)) and
   pseudo-terminals for background sessions on node-pty ([`node/spawn.mjs`](node/spawn.mjs)).
-  `claude` is a Node single executable application, so like Bun's standalone binary it is its
-  own `process.execPath`.
+  `claude` is a Node single executable application that embeds all of this, so like Bun's
+  standalone binary it is its own `process.execPath`.
 
 The workflow in [`.github/workflows/build.yml`](.github/workflows/build.yml) checks the latest
 release every day and publishes images for versions not built yet. Before publishing, it runs
